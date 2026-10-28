@@ -314,11 +314,11 @@ impl<'a, 'py> Exec<'a, 'py> {
                 self.number_dump(fp, value)
             }
             Codec::Boolean { .. } => Ok(Some(value.clone())),
-            Codec::DateTime(spec) => self.temporal_dump(spec, value),
-            Codec::NaiveDateTime { spec, .. } => self.temporal_dump(spec, value),
-            Codec::AwareDateTime { spec, .. } => self.temporal_dump(spec, value),
-            Codec::Time(spec) => self.temporal_dump(spec, value),
-            Codec::Date(spec) => self.temporal_dump(spec, value),
+            Codec::DateTime(spec) => self.temporal_dump(spec, "datetime", value),
+            Codec::NaiveDateTime { spec, .. } => self.temporal_dump(spec, "datetime", value),
+            Codec::AwareDateTime { spec, .. } => self.temporal_dump(spec, "datetime", value),
+            Codec::Time(spec) => self.temporal_dump(spec, "time", value),
+            Codec::Date(spec) => self.temporal_dump(spec, "date", value),
             Codec::TimeDelta { precision } => self.timedelta_dump(*precision, value),
             Codec::Nested { target, many, .. } => self.nested_dump(*target, *many, None, value),
             Codec::Pluck { target, many, pluck_key, .. } => {
@@ -461,6 +461,7 @@ impl<'a, 'py> Exec<'a, 'py> {
     fn temporal_dump(
         &self,
         spec: &crate::TemporalSpec,
+        obj_type: &str,
         value: &Bound<'py, PyAny>,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         if value.is_none() {
@@ -468,8 +469,15 @@ impl<'a, 'py> Exec<'a, 'py> {
         }
         let lib = self.lib();
         let py = self.py;
+        // Upstream calls the UNBOUND method (dt.datetime.isoformat(value)),
+        // so non-datetime inputs raise TypeError, not AttributeError.
+        let iso = match obj_type {
+            "datetime" => &lib.isoformat_datetime_fn,
+            "time" => &lib.isoformat_time_fn,
+            _ => &lib.isoformat_date_fn,
+        };
         Ok(Some(match &spec.fmt {
-            DateFmt::Iso => value.call_method0("isoformat")?,
+            DateFmt::Iso => iso.bind(py).call1((value,))?,
             DateFmt::Rfc => lib.format_datetime_fn.bind(py).call1((value,))?,
             DateFmt::Timestamp => lib.timestamp_fn.bind(py).call1((value,))?,
             DateFmt::TimestampMs => lib.timestamp_ms_fn.bind(py).call1((value,))?,
@@ -748,7 +756,9 @@ impl<'a, 'py> Exec<'a, 'py> {
                 LoadOut::Value => {}
             }
         }
-        if unknown != UnknownOpt::Exclude {
+        // Garbage `unknown` values behave like exclude (upstream compares
+        // `!= EXCLUDE` to enter but only INCLUDE/RAISE act inside).
+        if unknown == UnknownOpt::Include || unknown == UnknownOpt::Raise {
             // fields = {data_key-or-name}; for key in set(data) - fields
             let mut fkeys: Vec<Bound<PyAny>> = vec![];
             for fp in &node.load_fields {

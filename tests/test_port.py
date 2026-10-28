@@ -50,9 +50,9 @@ def test_custom_field_takes_opaque_path_with_identical_behavior():
         name = Upper()
 
     s = S()
-    assert s._rust_handle is not None  # compiles; field runs per-value calls
     assert s.dump({"name": "AbC"}) == {"name": "ABC"}
     assert s.load({"name": "AbC"}) == {"name": "abc"}
+    assert s._rust_handle is not None  # compiles; field runs per-value calls
 
 
 def test_no_extension_fallback(monkeypatch):
