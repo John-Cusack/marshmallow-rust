@@ -39,9 +39,9 @@ process per side for honest peak RSS).
 <!-- BENCH:TABLE -->
 | workload | upstream wall | port wall | upstream peak RSS | port peak RSS | speedup |
 | --- | --- | --- | --- | --- | --- |
-| nested-batch-500x4 (dump+load `many=True` x4, 500 nested objects) | 147.82 ms | 33.35 ms | 23176 KiB | 25204 KiB | 4.43x |
+| nested-batch-500x4 (dump+load `many=True` x4, 500 nested objects) | 181.81 ms | 40.12 ms | 23764 KiB | 24976 KiB | 4.53x |
 
-Frozen workload (`benches/two_track.py --reps 5`, medians of 5 fresh-process
+Frozen workload (`benches/two_track.py --reps 7`, medians of 7 fresh-process
 runs): port side asserts extension engagement; kill line <1.5x (lane 3).
 Measured 2026-10-28 on AMD Ryzen 9 5950X, CPython 3.12 + marshmallow 4.3.1
 vs release `_core` extension. Port peak RSS includes the extension pages.
