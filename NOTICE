@@ -1,0 +1,23 @@
+marshmallow-rust attribution and scope
+=======================================
+
+This project is a standalone Rust port of the `marshmallow`
+object-serialization/validation library. It is MIT licensed (see LICENSE);
+it vendors no upstream code.
+
+Behavior, field semantics, error-message texts, and the `Schema`
+dump/load/validate entry-point shapes are modelled on:
+
+  marshmallow-code/marshmallow — https://github.com/marshmallow-code/marshmallow
+  Copyright Steven Loria and contributors; MIT License
+  (see https://github.com/marshmallow-code/marshmallow/blob/dev/LICENSE).
+
+Ported against marshmallow 4.3.1. The `marshmallow` package itself is a
+runtime dependency (it provides the `Schema` base class, the field and
+validator classes the compiler inspects, and the pure-Python fallback
+path); it is not vendored here.
+
+`tests/corpus/*` are original fixtures written for this port (not copied
+from the marshmallow test suite). The equivalence harness
+(`tests/equiv.py`) and the upstream-suite gate compare against the
+installed `marshmallow` package only at test time.

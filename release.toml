@@ -1,0 +1,54 @@
+# Release configuration for the `marshmallow-rust` distribution.
+#
+# Lane-equivalent of the mirror-template `release.toml` (rustsmith
+# `docs/RELEASE.md`) for a port that subclasses upstream `Schema`:
+#   * `project` / `python_import` are the import identity of the port
+#     (`marshmallow_rust`); the upstream `marshmallow` name stays with
+#     upstream, and `pypi_dist` therefore carries the `-rust` suffix;
+#   * publishing runs from the release lane with a PyPI/crates.io API token
+#     (no CI trusted publisher, so no `release_workflow` entry).
+# Every name and version here MUST match `Cargo.toml`,
+# `marshmallow-core/Cargo.toml`, and `pyproject.toml`, or the release prep
+# battery fails.
+
+[release]
+schema = 1
+# Import identity of the port (the upstream package name stays with
+# upstream).
+project = "marshmallow_rust"
+# Rust core crate published to crates.io (`marshmallow-core/Cargo.toml
+# [package] name).
+rust_crate = "marshmallow-core"
+# Python distribution published to PyPI (`pyproject.toml [project] name).
+pypi_dist = "marshmallow-rust"
+# Python import name (`marshmallow_rust`, the shim package next to the
+# extension).
+python_import = "marshmallow_rust"
+# Release version. MUST equal `[package] version` in `Cargo.toml`,
+# `marshmallow-core/Cargo.toml`, and `[project] version` in `pyproject.toml`.
+version = "0.1.0"
+# Supported Python versions (floor and the tested matrix).
+requires_python = ">=3.9"
+python_versions = ["3.9", "3.10", "3.11", "3.12", "3.13"]
+# Runners the release workflow matrix would build on.
+platforms = ["ubuntu-22.04", "macos-14", "windows-2022"]
+# Publishing repository (the public mirror repo).
+github_repo = "John-Cusack/marshmallow-rust"
+# License of this port's own code, and the upstream attribution that must
+# also appear in `NOTICE`.
+license_spdx = "MIT"
+upstream = "marshmallow-code/marshmallow"
+upstream_url = "https://github.com/marshmallow-code/marshmallow"
+upstream_license = "MIT"
+upstream_authors = "Steven Loria and contributors"
+# The port depends on upstream marshmallow (Schema base class, fallback path).
+runtime_dependencies = ["marshmallow>=4,<5"]
+# Smoke checks run against the installed wheel (Python expressions; each
+# must evaluate truthy). The first two run dump/load through the Rust core,
+# the third proves the compiled extension is the one in use.
+smoke_exprs = [
+  'marshmallow_rust.Schema.from_dict({"a": __import__("marshmallow").fields.Int()})().dump({"a": 1}) == {"a": 1}',
+  'marshmallow_rust.Schema.from_dict({"a": __import__("marshmallow").fields.Int(required=True)})().load({"a": "2"}) == {"a": 2}',
+  'marshmallow_rust._core.__file__.endswith(".so")',
+  'marshmallow_rust.__version__ == "0.1.0"',
+]

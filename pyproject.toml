@@ -1,0 +1,35 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "marshmallow-rust"
+version = "0.1.0"
+description = "Rust port of marshmallow object serialization/validation: compiled schema dump/load kernel with a pure-Python fallback"
+authors = [{ name = "marshmallow-rust contributors" }]
+maintainers = [{ name = "marshmallow-rust publishers" }]
+requires-python = ">=3.9"
+readme = "README.md"
+license = "MIT"
+dependencies = ["marshmallow>=4,<5"]
+keywords = ["marshmallow", "serialization", "validation", "rust"]
+classifiers = [
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/John-Cusack/marshmallow-rust"
+Upstream = "https://github.com/marshmallow-code/marshmallow"
+
+[tool.maturin]
+module-name = "marshmallow_rust._core"
+bindings = "pyo3"
+# The reusable Rust core ships inside the sdist as a path dependency, so the
+# unpacked sdist rebuilds the wheel with no network checkout.
+sdist-include = ["marshmallow-core/**/*", "NOTICE", "LICENSE", "release.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

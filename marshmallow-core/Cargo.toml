@@ -1,0 +1,17 @@
+[package]
+name = "marshmallow-core"
+version = "0.1.0"
+edition = "2021"
+description = "Rust port of marshmallow schema dump/load kernel: compiled field codecs with whole-batch crossing"
+license = "MIT"
+repository = "https://github.com/John-Cusack/marshmallow-rust"
+readme = "README.md"
+keywords = ["marshmallow", "serialization", "validation"]
+categories = ["data-structures", "parsing"]
+
+[lib]
+name = "marshmallow_core"
+path = "src/lib.rs"
+
+[dependencies]
+pyo3 = { version = "0.24" }
