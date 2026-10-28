@@ -499,10 +499,6 @@ struct Lib {
     uuid_cls: Py<PyAny>,
     ip_address_fn: Py<PyAny>,
     ip_interface_fn: Py<PyAny>,
-    ipv4_address_cls: Py<PyAny>,
-    ipv6_address_cls: Py<PyAny>,
-    ipv4_interface_cls: Py<PyAny>,
-    ipv6_interface_cls: Py<PyAny>,
     fromiso_datetime: Py<PyAny>,
     fromiso_date: Py<PyAny>,
     fromiso_time: Py<PyAny>,
@@ -517,7 +513,6 @@ struct Lib {
     ensure_text_type_fn: Py<PyAny>,
     is_aware_fn: Py<PyAny>,
     numbers_integral_abc: Py<PyAny>,
-    seq_abc: Py<PyAny>,
     mapping_abc: Py<PyAny>,
     decimal_invalid_operation: Py<PyAny>,
     validation_error_cls: Py<PyAny>,
@@ -553,10 +548,6 @@ impl Lib {
             uuid_cls: py.import("uuid")?.getattr("UUID")?.unbind(),
             ip_address_fn: ipaddress.getattr("ip_address")?.unbind(),
             ip_interface_fn: ipaddress.getattr("ip_interface")?.unbind(),
-            ipv4_address_cls: ipaddress.getattr("IPv4Address")?.unbind(),
-            ipv6_address_cls: ipaddress.getattr("IPv6Address")?.unbind(),
-            ipv4_interface_cls: ipaddress.getattr("IPv4Interface")?.unbind(),
-            ipv6_interface_cls: ipaddress.getattr("IPv6Interface")?.unbind(),
             strptime_fn: dt.getattr("datetime")?.getattr("strptime")?.unbind(),
             fromiso_datetime: dt.getattr("datetime")?.getattr("fromisoformat")?.unbind(),
             fromiso_date: dt.getattr("date")?.getattr("fromisoformat")?.unbind(),
@@ -571,7 +562,6 @@ impl Lib {
             ensure_text_type_fn: mm_utils.getattr("ensure_text_type")?.unbind(),
             is_aware_fn: mm_utils.getattr("is_aware")?.unbind(),
             numbers_integral_abc: numbers.getattr("Integral")?.unbind(),
-            seq_abc: abc.getattr("Sequence")?.unbind(),
             mapping_abc: abc.getattr("Mapping")?.unbind(),
             decimal_invalid_operation: decimal_mod.getattr("InvalidOperation")?.unbind(),
             validation_error_cls: mm_exc.getattr("ValidationError")?.unbind(),
@@ -628,7 +618,6 @@ enum DateFmt {
 
 struct TemporalSpec {
     fmt: DateFmt,
-    format_str: String,
 }
 
 struct FieldPlan {
@@ -1176,10 +1165,7 @@ impl Plan {
             "timestamp_ms" => DateFmt::TimestampMs,
             other => DateFmt::Custom(other.to_string()),
         };
-        Ok(TemporalSpec {
-            fmt: parsed,
-            format_str: fmt,
-        })
+        Ok(TemporalSpec { fmt: parsed })
     }
 
     fn build_target(&mut self, d: &Bound<PyDict>) -> PyResult<usize> {

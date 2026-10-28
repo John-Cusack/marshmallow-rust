@@ -21,8 +21,8 @@ pub enum DumpOut<'py> {
     Skip,
 }
 
-pub enum LoadOut<'py> {
-    Value(Bound<'py, PyAny>),
+pub enum LoadOut {
+    Value,
     Missing,
 }
 
@@ -181,12 +181,12 @@ impl<'a, 'py> Exec<'a, 'py> {
     fn dump_one(&self, node: &NodePlan, obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let ret: Bound<PyAny> = node.dict_class.bind(self.py).call0()?;
         let obj_dict: Option<Bound<PyDict>> = if is_exact_dict(obj) {
-            obj.downcast::<PyDict>().ok().map(|d| d.clone())
+            obj.downcast::<PyDict>().ok().cloned()
         } else {
             None
         };
         let ret_dict: Option<Bound<PyDict>> = if is_exact_dict(&ret) {
-            ret.downcast::<PyDict>().ok().map(|d| d.clone())
+            ret.downcast::<PyDict>().ok().cloned()
         } else {
             None
         };
@@ -258,7 +258,7 @@ impl<'a, 'py> Exec<'a, 'py> {
             };
             if self.is_missing(&got) {
                 let v = if fp.dump_default_present {
-                    crate::maybe_call(py, &fp.dump_default.bind(py))?
+                    crate::maybe_call(py, fp.dump_default.bind(py))?
                 } else {
                     self.missing()
                 };
@@ -473,8 +473,8 @@ impl<'a, 'py> Exec<'a, 'py> {
             DateFmt::Rfc => lib.format_datetime_fn.bind(py).call1((value,))?,
             DateFmt::Timestamp => lib.timestamp_fn.bind(py).call1((value,))?,
             DateFmt::TimestampMs => lib.timestamp_ms_fn.bind(py).call1((value,))?,
-            DateFmt::Custom(_) => {
-                value.call_method("strftime", (spec.format_str.clone(),), None)?
+            DateFmt::Custom(fmt) => {
+                value.call_method("strftime", (fmt.clone(),), None)?
             }
         }))
     }
@@ -635,13 +635,11 @@ impl<'a, 'py> Exec<'a, 'py> {
         if many {
             let mut store = ErrStore::new();
             let out = PyList::empty(self.py);
-            let mut idx = 0usize;
-            for item in data.try_iter()? {
+            for (idx, item) in data.try_iter()?.enumerate() {
                 let item = item?;
                 let index = if node.index_errors { Some(idx) } else { None };
                 let v = self.load_single(node, &item, &mut store, &p, unknown, index)?;
                 out.append(v)?;
-                idx += 1;
             }
             let errors = if store.is_empty() { None } else { Some(store.root) };
             return Ok((out.into_any().unbind(), errors));
@@ -735,19 +733,19 @@ impl<'a, 'py> Exec<'a, 'py> {
         }
         // Fast paths need an exact dict on both sides.
         let data_dict: Option<Bound<PyDict>> = if is_exact_dict(data) {
-            data.downcast::<PyDict>().ok().map(|d| d.clone())
+            data.downcast::<PyDict>().ok().cloned()
         } else {
             None
         };
         let ret_dict: Option<Bound<PyDict>> = if is_exact_dict(&ret) {
-            ret.downcast::<PyDict>().ok().map(|d| d.clone())
+            ret.downcast::<PyDict>().ok().cloned()
         } else {
             None
         };
         for fp in &node.load_fields {
             match self.field_load(node, fp, data, data_dict.as_ref(), ret_dict.as_ref(), store, partial, index, &ret)? {
                 LoadOut::Missing => {}
-                LoadOut::Value(_) => {}
+                LoadOut::Value => {}
             }
         }
         if unknown != UnknownOpt::Exclude {
@@ -783,18 +781,20 @@ impl<'a, 'py> Exec<'a, 'py> {
         Ok(ret.into_any())
     }
 
+    // Ten args is the honest shape of the per-field context.
+    #[allow(clippy::too_many_arguments)]
     fn field_load(
         &self,
         _node: &NodePlan,
         fp: &FieldPlan,
         data: &Bound<'py, PyAny>,
-        data_dict: Option<&Bound<PyDict>>,
-        ret_dict: Option<&Bound<PyDict>>,
+        data_dict: Option<&Bound<'py, PyDict>>,
+        ret_dict: Option<&Bound<'py, PyDict>>,
         store: &mut ErrStore,
         partial: &Partial,
         index: Option<usize>,
         ret: &Bound<PyAny>,
-    ) -> PyResult<LoadOut<'py>> {
+    ) -> PyResult<LoadOut> {
         let py = self.py;
         let data_key = match &fp.data_key {
             Some(k) => k.bind(py).clone(),
@@ -816,7 +816,7 @@ impl<'a, 'py> Exec<'a, 'py> {
                     return Ok(LoadOut::Missing);
                 }
                 self.dict_set(ret, ret_dict, &out_key, v)?;
-                Ok(LoadOut::Value(self.none()))
+                Ok(LoadOut::Value)
             }
             Err(FieldErr::Ve { node, valid_data }) => {
                 let ek = match data_key.extract::<String>() {
@@ -829,7 +829,7 @@ impl<'a, 'py> Exec<'a, 'py> {
                         let b = vd.bind(py);
                         if b.is_truthy()? {
                             self.dict_set(ret, ret_dict, &out_key, b.clone())?;
-                            return Ok(LoadOut::Value(self.none()));
+                            return Ok(LoadOut::Value);
                         }
                         Ok(LoadOut::Missing)
                     }
@@ -867,7 +867,7 @@ impl<'a, 'py> Exec<'a, 'py> {
         if self.is_missing(value) {
             if fp.load_default_present {
                 let d = fp.load_default.bind(py);
-                let v = crate::maybe_call(py, &d)?;
+                let v = crate::maybe_call(py, d)?;
                 return Ok(v);
             }
             return Ok(self.missing());
@@ -929,7 +929,7 @@ impl<'a, 'py> Exec<'a, 'py> {
             None
         };
         Ok(FieldErr::Ve {
-            node: ve_messages_node(&messages.bind(py)),
+            node: ve_messages_node(messages.bind(py)),
             valid_data: valid_opt,
         })
     }
@@ -1032,7 +1032,7 @@ impl<'a, 'py> Exec<'a, 'py> {
                     None
                 };
                 Err(FieldErr::Ve {
-                    node: ve_messages_node(&messages.bind(py)),
+                    node: ve_messages_node(messages.bind(py)),
                     valid_data: valid_opt,
                 })
             }
@@ -1076,7 +1076,7 @@ impl<'a, 'py> Exec<'a, 'py> {
                         None
                     };
                     Err(FieldErr::Ve {
-                        node: ve_messages_node(&messages.bind(self.py)),
+                        node: ve_messages_node(messages.bind(self.py)),
                         valid_data: valid_opt,
                     })
                 }
@@ -1260,7 +1260,7 @@ impl<'a, 'py> Exec<'a, 'py> {
         let mut num = match lib.decimal_cls.bind(py).call1((s,)) {
             Ok(v) => v,
             Err(e) => {
-                if e.is_instance(py, &lib.decimal_invalid_operation.bind(py)) {
+                if e.is_instance(py, lib.decimal_invalid_operation.bind(py)) {
                     return Err(self.ve_msg(self.tmpl(fp, "invalid", "Not a valid number."), vec![]));
                 }
                 if e.is_instance_of::<PyTypeError>(py) || e.is_instance_of::<PyValueError>(py) {
@@ -1289,7 +1289,7 @@ impl<'a, 'py> Exec<'a, 'py> {
                 match num.call_method("quantize", (places,), Some(&kwargs)) {
                     Ok(q) => num = q,
                     Err(e) => {
-                        if e.is_instance(py, &lib.decimal_invalid_operation.bind(py)) {
+                        if e.is_instance(py, lib.decimal_invalid_operation.bind(py)) {
                             return Err(self.ve_msg(self.tmpl(fp, "invalid", "Not a valid number."), vec![]));
                         }
                         return Err(e.into());
@@ -1374,8 +1374,8 @@ impl<'a, 'py> Exec<'a, 'py> {
                 DateFmt::Rfc => lib.parsedate_to_datetime_fn.bind(py).call1((value,)),
                 DateFmt::Timestamp => lib.from_timestamp_fn.bind(py).call1((value,)),
                 DateFmt::TimestampMs => lib.from_timestamp_ms_fn.bind(py).call1((value,)),
-                DateFmt::Custom(_) => {
-                    lib.strptime_fn.bind(py).call1((value, spec.format_str.clone()))
+                DateFmt::Custom(fmt) => {
+                    lib.strptime_fn.bind(py).call1((value, fmt.clone()))
                 }
             };
             match conv {
@@ -1522,6 +1522,7 @@ impl<'a, 'py> Exec<'a, 'py> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn enum_load(
         &self,
         fp: &FieldPlan,
@@ -1574,6 +1575,7 @@ impl<'a, 'py> Exec<'a, 'py> {
             },
         }
     }
+    #[allow(clippy::too_many_arguments)]
     fn nested_load(
         &self,
         _fp: &FieldPlan,
@@ -1632,13 +1634,11 @@ impl<'a, 'py> Exec<'a, 'py> {
         if many {
             let mut store = ErrStore::new();
             let out = PyList::empty(py);
-            let mut idx = 0usize;
-            for item in eff_value.try_iter()? {
+            for (idx, item) in eff_value.try_iter()?.enumerate() {
                 let item = item?;
                 let index = if node.index_errors { Some(idx) } else { None };
                 let v = self.load_single(node, &item, &mut store, &child_partial, unknown, index)?;
                 out.append(v)?;
-                idx += 1;
             }
             if store.is_empty() {
                 return Ok(out.into_any());
@@ -1693,6 +1693,7 @@ impl<'a, 'py> Exec<'a, 'py> {
         Err(FieldErr::Ve { node: ErrNode::Map(map), valid_data: Some(out.into_any().unbind()) })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn tuple_load(
         &self,
         fp: &FieldPlan,
@@ -1769,6 +1770,7 @@ impl<'a, 'py> Exec<'a, 'py> {
         }
         Err(FieldErr::Ve { node: ErrNode::Map(map), valid_data: Some(valid_list.into_any().unbind()) })
     }
+    #[allow(clippy::too_many_arguments)]
     fn mapping_load(
         &self,
         fp: &FieldPlan,
@@ -2059,7 +2061,7 @@ impl<'a, 'py> Exec<'a, 'py> {
         if !value.is_truthy()? {
             return Ok(false);
         }
-        if !value.contains(&pyo3::types::PyString::new(py, "@"))? {
+        if !value.contains(pyo3::types::PyString::new(py, "@"))? {
             return Ok(false);
         }
         // rsplit returns a list; unpack positionally like upstream.
@@ -2068,10 +2070,10 @@ impl<'a, 'py> Exec<'a, 'py> {
         if lib.email_user_regex.bind(py).call_method("match", (user,), None)?.is_none() {
             return Ok(false);
         }
-        if !lib.email_whitelist.bind(py).contains(&domain)? {
-            if lib.email_domain_regex.bind(py).call_method("match", (domain,), None)?.is_none() {
-                return Ok(false);
-            }
+        if !lib.email_whitelist.bind(py).contains(&domain)?
+            && lib.email_domain_regex.bind(py).call_method("match", (domain,), None)?.is_none()
+        {
+            return Ok(false);
         }
         Ok(true)
     }
@@ -2088,7 +2090,7 @@ impl<'a, 'py> Exec<'a, 'py> {
         if !value.is_truthy()? {
             return Ok(false);
         }
-        let has_scheme_sep = value.contains(&pyo3::types::PyString::new(py, "://"))?;
+        let has_scheme_sep = value.contains(pyo3::types::PyString::new(py, "://"))?;
         let mut scheme: Option<Bound<PyAny>> = None;
         if has_scheme_sep {
             // split returns a list; unpack positionally like upstream.
